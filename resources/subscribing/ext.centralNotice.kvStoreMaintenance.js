@@ -15,9 +15,13 @@
 
 		// Time past expiry before actually removing items: 1 day (in seconds).
 		// (This should prevent race conditions among browser tabs.)
-		LEEWAY_FOR_REMOVAL = 86400;
+		LEEWAY_FOR_REMOVAL = 86400,
 
-	function makeRemoveExpiredFunction( length, d ) {
+		// Max idle time (in milliseconds) that may be remaining for
+		// removeExpired() to stop removing items
+		REMAINING_IDLE_TIME_TO_STOP = 5;
+
+	function makeRemoveExpiredFunction( length ) {
 		// We don't know how far we'll get before the user navigates away. Start at a random index
 		// and wrap around. This makes checking all items eventually more likely, even if there
 		// are many keys and/or each page view is very short.
@@ -65,7 +69,7 @@
 		}
 		return function removeExpired( deadline ) {
 			var index, key, rawValue, value;
-			while ( deadline.timeRemaining() > 5 ) {
+			while ( deadline.timeRemaining() > REMAINING_IDLE_TIME_TO_STOP ) {
 				index = next();
 				if ( index === null ) {
 					// Reached end
@@ -119,8 +123,6 @@
 			if ( index !== null ) {
 				// Time's up, continue later
 				mw.requestIdleCallback( removeExpired );
-			} else {
-				d.resolve();
 			}
 		};
 	}
@@ -135,23 +137,18 @@
 
 		/**
 		 * Schedule the removal of expired KVStore items.
-		 *
-		 * @return {jQuery.Promise}
 		 */
 		removeExpiredItemsWhenIdle: function () {
-			var d = $.Deferred();
 			try {
 				if ( !window.localStorage || !localStorage.length ) {
-					return d.resolve();
+					return;
 				}
 			} catch ( e ) {
-				return d.resolve();
+				return;
 			}
 
 			// Schedule
-			mw.requestIdleCallback( makeRemoveExpiredFunction( localStorage.length, d ) );
-
-			return d.promise();
+			mw.requestIdleCallback( makeRemoveExpiredFunction( localStorage.length ) );
 		}
 	};
 
